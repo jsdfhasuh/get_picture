@@ -3,13 +3,63 @@ import threading
 
 import numpy as np
 from PIL import Image
-from PySide6.QtCore import QPointF, QSettings, Qt
+from PySide6.QtCore import QPoint, QPointF, QSettings, Qt
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtTest import QTest
 
 from capture_tool.models import Roi
 from capture_tool.preview import PreviewView
 from capture_tool.window import MainWindow
 from capture_tool import storage
+
+
+def test_preview_zoom_controls_live_refresh_wheel_and_original_roi(app, wait, tmp_path):
+    settings = QSettings(str(tmp_path / "zoom.ini"), QSettings.Format.IniFormat)
+    window = MainWindow(demo=True, settings=settings)
+    window.directory.setText(str(tmp_path / "images"))
+    window.show()
+    try:
+        wait(lambda: window.device.count())
+        window.connect_button.click()
+        wait(lambda: window.save_one.isEnabled())
+        view = window.preview
+        roi = Roi(100, 80, 200, 160)
+        view.set_roi(roi)
+        original_scale = view.transform().m11()
+        window.zoom_in.click()
+        enlarged = view.transform().m11()
+        assert enlarged > original_scale
+        assert window.zoom_label.text() == f"{enlarged * 100:.1f}%"
+        old_frame = window._frame.block_id
+        wait(lambda: window._frame.block_id > old_frame + 2)
+        assert abs(view.transform().m11() - enlarged) < 1e-9
+        window.zoom_out.click()
+        assert abs(view.transform().m11() - original_scale) < 1e-9
+        pos = QPointF(view.viewport().rect().center())
+        wheel = QWheelEvent(pos, QPointF(view.viewport().mapToGlobal(pos.toPoint())),
+            QPoint(), QPoint(0, 120), Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+            Qt.ScrollPhase.NoScrollPhase, False)
+        app.sendEvent(view.viewport(), wheel)
+        assert view.transform().m11() > original_scale
+        assert view.roi == roi
+        window.format.setCurrentIndex(1)
+        window.save_one.click()
+        wait(lambda: window._count == 1)
+        assert Image.open(next((tmp_path / "images").glob("*.png"))).size == (200, 160)
+        for _ in range(80):
+            view.zoom_in()
+        assert abs(view.transform().m11() - 32) < 1e-9
+        for _ in range(100):
+            view.zoom_out()
+        assert abs(view.transform().m11() - .01) < 1e-9
+        view.actual_size()
+        assert window.zoom_label.text() == "100.0%"
+        view.fit_image()
+        assert view._fit
+        assert view.roi == roi
+    finally:
+        window.close()
+        wait(lambda: window._ready_to_close)
 
 
 def test_roi_drag_at_fit_scale_and_move(app):

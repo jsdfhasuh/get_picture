@@ -130,7 +130,15 @@ class MainWindow(QMainWindow):
         self.clear_roi = QPushButton("清除 ROI")
         fit = QPushButton("适应窗口")
         actual = QPushButton("1:1 像素")
-        for widget in [self.draw_roi, self.clear_roi, fit, actual]:
+        self.zoom_in = QPushButton("放大")
+        self.zoom_out = QPushButton("缩小")
+        self.zoom_in.setToolTip("以画面中心放大；也可在画面上向上滚动鼠标滚轮")
+        self.zoom_out.setToolTip("以画面中心缩小；也可在画面上向下滚动鼠标滚轮")
+        self.zoom_label = QLabel("—")
+        self.zoom_label.setMinimumWidth(60)
+        self.zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.zoom_label.setToolTip("相对于原图像素的预览比例，仅影响显示")
+        for widget in [self.draw_roi, self.clear_roi, self.zoom_out, self.zoom_in, fit, actual, self.zoom_label]:
             toolbar.addWidget(widget)
         toolbar.addStretch()
         left_layout.addLayout(toolbar)
@@ -262,6 +270,9 @@ class MainWindow(QMainWindow):
 
         fit.clicked.connect(self.preview.fit_image)
         actual.clicked.connect(self.preview.actual_size)
+        self.zoom_in.clicked.connect(self.preview.zoom_in)
+        self.zoom_out.clicked.connect(self.preview.zoom_out)
+        self.preview.zoom_changed.connect(lambda scale: self.zoom_label.setText(f"{scale * 100:.1f}%"))
         browse.clicked.connect(self._choose_directory)
         sdk_browse.clicked.connect(self._choose_sdk)
         self.open_folder.clicked.connect(self._open_directory)

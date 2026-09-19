@@ -18,6 +18,7 @@ def image_from_array(pixels: np.ndarray) -> QImage:
 
 class PreviewView(QGraphicsView):
     roi_changed = Signal(object)
+    zoom_changed = Signal(float)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -61,10 +62,33 @@ class PreviewView(QGraphicsView):
         self._fit = True
         if self._width:
             self.fitInView(QRectF(0, 0, self._width, self._height), Qt.AspectRatioMode.KeepAspectRatio)
+            self.zoom_changed.emit(self.transform().m11())
 
     def actual_size(self):
+        if not self._width:
+            return
         self._fit = False
         self.resetTransform()
+        self.zoom_changed.emit(self.transform().m11())
+
+    def zoom_in(self):
+        self._zoom(1.2)
+
+    def zoom_out(self):
+        self._zoom(1 / 1.2)
+
+    def _zoom(self, factor: float, under_mouse: bool = False):
+        if not self._width:
+            return
+        self._fit = False
+        current = self.transform().m11()
+        target = max(0.01, min(32.0, current * factor))
+        previous_anchor = self.transformationAnchor()
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse if under_mouse
+                                     else QGraphicsView.ViewportAnchor.AnchorViewCenter)
+        self.scale(target / current, target / current)
+        self.setTransformationAnchor(previous_anchor)
+        self.zoom_changed.emit(self.transform().m11())
 
     def set_draw_mode(self, enabled: bool):
         self.draw_mode = enabled
@@ -133,11 +157,9 @@ class PreviewView(QGraphicsView):
             super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
-        self._fit = False
-        factor = 1.2 if event.angleDelta().y() > 0 else 1 / 1.2
-        current = self.transform().m11()
-        if 0.01 <= current * factor <= 32:
-            self.scale(factor, factor)
+        delta = event.angleDelta().y() or event.pixelDelta().y()
+        if delta:
+            self._zoom(1.2 ** max(-10, min(10, delta / 120)), under_mouse=True)
         event.accept()
 
     def resizeEvent(self, event):
