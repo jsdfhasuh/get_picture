@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.pytest_cache/
+captures/
+build/
+*.log
+.env
+.env.*
+*.key
+*.pem
